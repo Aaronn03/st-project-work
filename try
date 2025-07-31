@@ -1,0 +1,109 @@
+# Enhanced Dust Monitoring System Demo
+# Now with manual and automatic prediction modes
+
+import pandas as pd
+import numpy as np
+import random
+from pathlib import Path
+#from dust_monitoring_fl import DustSuppressionController
+
+class DustMonitoringDemo:
+    def __init__(self):
+        self.controller = DustSuppressionController(threshold_pm=50.0)
+        
+    def manual_suppression_demo(self):
+        """Demonstrate suppression with user-provided PM levels"""
+        print("\n=== Manual Dust Suppression Demo ===")
+        print("Enter PM levels to test the suppression system")
+        print("Type 'exit' to return to menu\n")
+        
+        while True:
+            try:
+                user_input = input("Enter PM level (µg/m³): ")
+                if user_input.strip().lower() == 'exit':
+                    break
+                
+                pm_level = float(user_input)
+                self._evaluate_and_display(pm_level)
+                
+            except ValueError:
+                print("Invalid input. Please enter a number or 'exit'")
+    
+    def auto_suppression_demo(self, num_samples=10):
+        """Demonstrate suppression with randomly generated PM levels"""
+        print("\n=== Automatic Dust Suppression Demo ===")
+        print(f"Testing with {num_samples} randomly generated PM levels...\n")
+        
+        # Generate realistic PM values (skewed toward lower values)
+        pm_levels = np.clip(
+            np.random.exponential(scale=30, size=num_samples),
+            5, 200
+        ).round(1)
+        
+        for i, pm in enumerate(pm_levels, 1):
+            print(f"\nSample {i}/{num_samples} - PM: {pm} µg/m³")
+            self._evaluate_and_display(pm)
+            if i < num_samples:  # Pause between samples except last
+                input("\nPress Enter for next sample...")
+    
+    def _evaluate_and_display(self, pm_level):
+        """Shared evaluation and display logic"""
+        needs_suppression, dust_level = self.controller.evaluate_dust_level(pm_level)
+        print(f"Dust Level: {dust_level}")
+        
+        if needs_suppression:
+            result = self.controller.activate_suppression(dust_level)
+            print("SUPPRESSION ACTIVATED:")
+            print(f"- Intensity: {result['intensity'] * 100:.0f}%")
+            print(f"- Duration: {result['duration']} mins")
+            print(f"- Water: {result['resource_usage']['water']:.1f}L")
+            print(f"- Energy: {result['resource_usage']['energy']:.1f}kWh")
+        else:
+            print("No suppression needed (safe levels)")
+
+def analyze_dataset(data_path: str):
+    """Analyze the dust monitoring dataset"""
+    print("\n=== Dataset Analysis ===")
+    try:
+        df = pd.read_csv(data_path)
+        print(f"Dataset shape: {df.shape}")
+        print(f"Columns: {df.columns.tolist()}")
+        
+        if 'PM' in df.columns:
+            print("\nPM Statistics:")
+            print(f"Mean: {df['PM'].mean():.2f} µg/m³")
+            print(f"Max: {df['PM'].max():.2f} µg/m³")
+            exceedances = (df['PM'] > 50).mean() * 100
+            print(f"Exceedances: {exceedances:.1f}% > 50 µg/m³")
+            
+    except Exception as e:
+        print(f"Error analyzing dataset: {e}")
+
+def main():
+    print("=== Enhanced Dust Monitoring System ===")
+    demo = DustMonitoringDemo()
+    data_path = r"C:\Users\HP\Documents\Nana\Project 2\filtered_csv.csv"
+    
+    while True:
+        print("\nMain Menu:")
+        print("1. Analyze dataset")
+        print("2. Manual suppression demo")
+        print("3. Automatic suppression demo")
+        print("4. Exit")
+        
+        choice = input("Select option (1-4): ").strip()
+        
+        if choice == '1':
+            analyze_dataset(data_path)
+        elif choice == '2':
+            demo.manual_suppression_demo()
+        elif choice == '3':
+            demo.auto_suppression_demo(num_samples=5)  # Test with 5 samples
+        elif choice == '4':
+            print("Exiting system...")
+            break
+        else:
+            print("Invalid choice. Please try again.")
+
+if __name__ == "__main__":
+    main()
