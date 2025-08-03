@@ -1,17 +1,64 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import random
-from pathlib import Path
-# from dust_monitoring_fl import DustSuppressionController
 
-# Set page config
-st.set_page_config(
-    page_title="Dust Monitoring System",
-    page_icon="🌫️",
-    layout="wide"
-)
+# === Dust Suppression Controller ===
+class DustSuppressionController:
+    """
+    Implements automated dust suppression based on PM level.
+    Returns a dictionary with suppression details.
+    """
+    def __init__(self, threshold_pm=50.0):
+        self.threshold_pm = threshold_pm
+        self.suppression_history = []
 
+    def evaluate_and_control(self, predicted_pm, timestamp=None):
+        """
+        Evaluate dust level and activate suppression if needed.
+        Returns a dictionary with action details.
+        """
+        # Default values
+        level = "LOW"
+        action = "NONE"
+        intensity = 0.0
+        duration = 0
+        water_usage = 0.0
+        energy = 0.0
+
+        if predicted_pm > self.threshold_pm * 0.95:
+            if predicted_pm > self.threshold_pm:
+                level = "HIGH"
+                intensity = 1.0
+                duration = 30  # minutes
+            else:
+                level = "MEDIUM"
+                intensity = 0.6
+                duration = 15  # minutes
+
+            action = "ACTIVATE"
+            # Example calculations (customize as needed)
+            water_usage = intensity * duration * 10  # liters
+            energy = intensity * duration * 0.5      # kWh
+
+        # Prepare result dictionary
+        result = {
+            'timestamp': timestamp or 'now',
+            'predicted_pm': predicted_pm,
+            'level': level,
+            'intensity': intensity,
+            'duration': duration,
+            'action': action,
+            'water_usage': water_usage,
+            'energy': energy
+        }
+
+        # Log action if suppression is activated
+        if action == "ACTIVATE":
+            self.suppression_history.append(result)
+
+        return result
+
+# === Streamlit App ===
 class DustMonitoringApp:
     def __init__(self):
         self.controller = DustSuppressionController(threshold_pm=50.0)
@@ -56,7 +103,7 @@ class DustMonitoringApp:
             results = []
             
             for i, pm in enumerate(pm_levels):
-                result = self._get_suppression_result(pm)
+                result = self.controller.evaluate_and_control(pm)
                 results.append((pm, result))
                 progress_bar.progress((i + 1) / samples)
                 
@@ -66,40 +113,34 @@ class DustMonitoringApp:
                 with st.expander(f"PM: {pm} µg/m³ - {result['level']}"):
                     self._show_result_details(pm, result)
     
-    def _get_suppression_result(self, pm_level):
-        """Get suppression results for a given PM level"""
-        needs_suppression, dust_level = self.controller.evaluate_dust_level(pm_level)
-        
-        if needs_suppression:
-            result = self.controller.activate_suppression(dust_level)
-            result['level'] = dust_level
-            return result
-        return {'level': 'LOW', 'status': 'No suppression needed'}
-    
     def _display_results(self, pm_level):
         """Display results for manual demo"""
-        result = self._get_suppression_result(pm_level)
+        result = self.controller.evaluate_and_control(pm_level)
         
         st.metric("Current PM Level", f"{pm_level} µg/m³")
         st.metric("Dust Level", result['level'])
         
-        if result['status'] != 'No suppression needed':
+        if result['action'] == 'ACTIVATE':
             st.warning("Suppression Activated!")
             cols = st.columns(4)
             cols[0].metric("Intensity", f"{result['intensity'] * 100:.0f}%")
             cols[1].metric("Duration", f"{result['duration']} mins")
-            cols[2].metric("Water", f"{result['resource_usage']['water']:.1f}L")
-            cols[3].metric("Energy", f"{result['resource_usage']['energy']:.1f}kWh")
+            cols[2].metric("Water", f"{result.get('water_usage', 0):.1f}L")
+            cols[3].metric("Energy", f"{result.get('energy', 0):.1f}kWh")
         else:
             st.success("No suppression needed - Safe levels")
     
     def _show_result_details(self, pm_level, result):
         """Show detailed results for auto demo"""
-        self._display_results(pm_level)
+        st.metric("Current PM Level", f"{pm_level} µg/m³")
+        st.metric("Dust Level", result['level'])
         
-        if result['status'] != 'No suppression needed':
+        if result['action'] == 'ACTIVATE':
+            st.warning("Suppression Activated!")
             st.write("### Suppression Details")
             st.json(result)
+        else:
+            st.success("No suppression needed - Safe levels")
     
     def data_analysis(self, data_path):
         """Dataset analysis section"""
@@ -130,6 +171,11 @@ class DustMonitoringApp:
             st.error(f"Error loading dataset: {e}")
 
 def main():
+    st.set_page_config(
+        page_title="Dust Monitoring System",
+        page_icon="🌫️",
+        layout="wide"
+    )
     st.title("🌫️ Dust Monitoring System")
     st.markdown("""
     *Application of Machine Learning in Dust Monitoring and Suppression*
